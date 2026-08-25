@@ -364,7 +364,6 @@ def render_html(report: RunReport) -> str:
     }}
     .http h4 {{ margin: 0 0 6px; font-size: 13px; }}
     .muted {{ color: var(--muted); }}
-    footer {{ margin-top: 18px; color: var(--muted); font-size: 12px; }}
   </style>
 </head>
 <body>
@@ -402,7 +401,6 @@ def render_html(report: RunReport) -> str:
         {rows}
       </tbody>
     </table>
-    <footer>Сформировано app.py · клик по строке раскрывает HTTP-запросы и ошибку. Отчёт самодостаточный, без внешних скриптов.</footer>
   </main>
   <script>
     document.querySelectorAll("tr.case").forEach(row => {{
@@ -440,7 +438,7 @@ def _test_row(index: int, test: TestResult) -> str:
     if test.skip_reason:
         error_html += f"<p class='muted'>Пропуск: {html.escape(test.skip_reason)}</p>"
     http_html = _http_html(test.http_calls)
-    details = error_html + http_html or "<p class='muted'>Нет дополнительных данных.</p>"
+    details = error_html + http_html
     return f"""
         <tr class="case" data-status="{html.escape(test.status)}">
           <td>{index}</td>
