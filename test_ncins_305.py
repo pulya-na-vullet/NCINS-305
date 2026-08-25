@@ -38,9 +38,11 @@ def mock_base_url() -> str:
 
 
 @pytest.fixture
-def client(mock_base_url: str) -> NcinsClient:
+def client(mock_base_url: str, request: pytest.FixtureRequest) -> NcinsClient:
     """Клиент на локальный mock. Живой стенд — только тесты с маркером live."""
-    return NcinsClient(NcinsConfig.from_env(base_url=mock_base_url))
+    ncins_client = NcinsClient(NcinsConfig.from_env(base_url=mock_base_url))
+    request.node.http_calls = ncins_client.history
+    return ncins_client
 
 
 @pytest.fixture
@@ -93,6 +95,7 @@ def test_generate_form_without_file_attributes_returns_200(
 def test_generate_form_missing_required_field_returns_400(
     client: NcinsClient, missing: str
 ) -> None:
+    """NCINS-277: без обязательного поля — 400."""
     payload = client.config.generate_form_payload()
     del payload[missing]
     response = client.generate_form(payload=payload)
@@ -137,42 +140,49 @@ def test_download_example_file_id_from_jira(client: NcinsClient) -> None:
 
 @pytest.mark.mock
 def test_download_missing_file_id_returns_400(client: NcinsClient) -> None:
+    """NCINS-305: нет fileId — 400."""
     response = client.download(file_id=None, raw_json={})
     assert response.status_code == 400, response.text
 
 
 @pytest.mark.mock
 def test_download_empty_file_id_returns_400(client: NcinsClient) -> None:
+    """NCINS-305: пустой fileId — 400."""
     response = client.download("")
     assert response.status_code == 400, response.text
 
 
 @pytest.mark.mock
 def test_download_null_file_id_returns_400(client: NcinsClient) -> None:
+    """NCINS-305: fileId=null — 400."""
     response = client.download(file_id=None, raw_json={"fileId": None})
     assert response.status_code == 400, response.text
 
 
 @pytest.mark.mock
 def test_download_invalid_uuid_returns_400(client: NcinsClient) -> None:
+    """NCINS-305: fileId не UUID — 400."""
     response = client.download("not-a-uuid")
     assert response.status_code == 400, response.text
 
 
 @pytest.mark.mock
 def test_download_unknown_file_id_returns_404(client: NcinsClient) -> None:
+    """NCINS-305: неизвестный UUID — 404."""
     response = client.download(UNKNOWN_FILE_ID)
     assert response.status_code == 404, response.text
 
 
 @pytest.mark.mock
 def test_download_without_json_body_returns_400(client: NcinsClient) -> None:
+    """NCINS-305: нет JSON-тела — 400."""
     response = client.download(file_id=None, send_json=False)
     assert response.status_code == 400, response.text
 
 
 @pytest.mark.mock
 def test_download_get_not_allowed(client: NcinsClient, file_id: str) -> None:
+    """NCINS-305: GET вместо POST — 404/405."""
     response = client.session.get(
         client._url("/v1/doc/download"),
         params={"fileId": file_id},
@@ -183,9 +193,10 @@ def test_download_get_not_allowed(client: NcinsClient, file_id: str) -> None:
 
 @pytest.mark.live
 @pytest.mark.skipif(not LIVE, reason="Задайте NCINS_LIVE=1 для стенда INT")
-def test_live_generate_and_download() -> None:
+def test_live_generate_and_download(request: pytest.FixtureRequest) -> None:
     """E2E на INT: generate-form → download PDF."""
     client = NcinsClient()
+    request.node.http_calls = client.history
     file_id = client.config.file_id
     if not file_id:
         generate = client.generate_form(include_file_attributes=True)
@@ -204,10 +215,12 @@ def test_live_generate_and_download() -> None:
 
 
 def test_mock_server_pdf_magic() -> None:
+    """Служебное: mock отдаёт валидный PDF magic."""
     assert _is_pdf(PDF_BYTES)
 
 
 def test_client_builds_download_url() -> None:
+    """Служебное: URL download/generate-form не теряет префикс сервиса."""
     client = NcinsClient(
         NcinsConfig.from_env(base_url="http://example.local/ufr-eos-ul-ncins-core-api")
     )

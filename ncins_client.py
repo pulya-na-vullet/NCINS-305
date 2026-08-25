@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -133,12 +134,69 @@ class NcinsConfig:
         return payload
 
 
+@dataclass
+class HttpCall:
+    method: str
+    url: str
+    request_headers: dict[str, str]
+    request_body: Any
+    status_code: int
+    response_headers: dict[str, str]
+    response_preview: str
+    elapsed_ms: float
+
+
+def _preview_response(response: requests.Response) -> str:
+    content_type = (response.headers.get("Content-Type") or "").lower()
+    if "pdf" in content_type or (response.content[:4] == b"%PDF"):
+        magic = response.content[:8].decode("latin-1", errors="replace")
+        return f"<PDF {len(response.content)} bytes, magic={magic!r}>"
+    text = response.text
+    if len(text) > 4000:
+        return text[:4000] + "\n… [truncated]"
+    return text
+
+
 class NcinsClient:
     def __init__(self, config: NcinsConfig | None = None) -> None:
         self.config = config or NcinsConfig.from_env()
+        self.history: list[HttpCall] = []
         self.session = requests.Session()
         self.session.verify = self.config.verify_ssl
         self.session.headers.update(self.config.ufr_headers())
+        self.session.hooks["response"].append(self._capture)
+
+    def _capture(self, response: requests.Response, *_args: Any, **_kwargs: Any) -> None:
+        request_body: Any = None
+        raw_body = response.request.body
+        if raw_body:
+            if isinstance(raw_body, bytes):
+                try:
+                    request_body = raw_body.decode("utf-8")
+                except UnicodeDecodeError:
+                    request_body = f"<{len(raw_body)} bytes>"
+            else:
+                request_body = raw_body
+            if isinstance(request_body, str):
+                try:
+                    request_body = json.loads(request_body)
+                except json.JSONDecodeError:
+                    pass
+        elapsed_ms = (
+            response.elapsed.total_seconds() * 1000 if response.elapsed else 0.0
+        )
+        self.history.append(
+            HttpCall(
+                method=response.request.method or "",
+                url=response.url,
+                request_headers=dict(response.request.headers),
+                request_body=request_body,
+                status_code=response.status_code,
+                response_headers=dict(response.headers),
+                response_preview=_preview_response(response),
+                elapsed_ms=elapsed_ms,
+            )
+        )
 
     def _url(self, path: str) -> str:
         return f"{self.config.base_url.rstrip('/')}/{path.lstrip('/')}"
