@@ -1,4 +1,4 @@
-"""Локальный mock ncins-core-api для офлайн-прогона тестов NCINS-305."""
+"""Локальный mock ncins-core-api для офлайн-прогона тестов NCINS-305 / NCINS-306."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 
 
@@ -18,11 +19,19 @@ PDF_BYTES = (
 
 KNOWN_FILE_ID = "285946b0-002e-428c-b1e1-d5c558e81c24"
 UNKNOWN_FILE_ID = "00000000-0000-4000-8000-000000000000"
+KNOWN_OPERATION_ID = "6a8f275decea715b0ef88213"
+UNKNOWN_OPERATION_ID = "000000000000000000000000"
+
+_SIGNED_SAMPLE = Path(__file__).resolve().parent / "response.pdf"
+SIGNED_PDF_BYTES = (
+    _SIGNED_SAMPLE.read_bytes() if _SIGNED_SAMPLE.is_file() else PDF_BYTES
+)
 
 
 class MockNcinsHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     generated_ids: set[str] = {KNOWN_FILE_ID}
+    generated_operation_ids: set[str] = {KNOWN_OPERATION_ID}
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
         return
@@ -48,6 +57,14 @@ class MockNcinsHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self._send(status, body, "application/json")
 
+    def _send_pdf(self, filename: str, content: bytes) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/pdf")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
     def do_POST(self) -> None:  # noqa: N802
         path = self.path.split("?", 1)[0]
         if path.rstrip("/") == "/v1/doc/generate-form":
@@ -55,6 +72,9 @@ class MockNcinsHandler(BaseHTTPRequestHandler):
             return
         if path.rstrip("/") == "/v1/doc/download":
             self._handle_download()
+            return
+        if path.rstrip("/") == "/v1/doc/download-signed":
+            self._handle_download_signed()
             return
         self._send_json(404, {"error": "not found", "path": path})
 
@@ -78,11 +98,13 @@ class MockNcinsHandler(BaseHTTPRequestHandler):
             return
 
         file_id = str(uuid.uuid4())
+        operation_id = uuid.uuid4().hex
         self.generated_ids.add(file_id)
+        self.generated_operation_ids.add(operation_id)
         self._send_json(
             200,
             {
-                "operationId": uuid.uuid4().hex,
+                "operationId": operation_id,
                 "createdDate": 1787303150880,
                 "documentIds": [file_id],
             },
@@ -124,12 +146,42 @@ class MockNcinsHandler(BaseHTTPRequestHandler):
             self._send_json(406, {"error": "not acceptable"})
             return
 
-        self.send_response(200)
-        self.send_header("Content-Type", "application/pdf")
-        self.send_header("Content-Disposition", f'attachment; filename="{file_id}.pdf"')
-        self.send_header("Content-Length", str(len(PDF_BYTES)))
-        self.end_headers()
-        self.wfile.write(PDF_BYTES)
+        self._send_pdf(f"{file_id}.pdf", PDF_BYTES)
+
+    def _handle_download_signed(self) -> None:
+        accept = (self.headers.get("Accept") or "").lower()
+        content_type = (self.headers.get("Content-Type") or "").lower()
+        if "application/json" not in content_type:
+            self._send_json(400, {"error": "content-type must be application/json"})
+            return
+
+        payload = self._read_json()
+        if payload == "__invalid__" or not isinstance(payload, dict):
+            self._send_json(400, {"error": "invalid json"})
+            return
+
+        if "operationId" not in payload:
+            self._send_json(400, {"error": "operationId is required"})
+            return
+
+        operation_id = payload.get("operationId")
+        if operation_id is None or str(operation_id).strip() == "":
+            self._send_json(400, {"error": "operationId is required"})
+            return
+
+        operation_id = str(operation_id).strip()
+        if operation_id not in self.generated_operation_ids:
+            self._send_json(
+                404,
+                {"error": "signed document not found", "operationId": operation_id},
+            )
+            return
+
+        if "application/pdf" not in accept and "*/*" not in accept and accept:
+            self._send_json(406, {"error": "not acceptable"})
+            return
+
+        self._send_pdf(f"{operation_id}-signed.pdf", SIGNED_PDF_BYTES)
 
 
 class MockNcinsServer:
@@ -144,6 +196,7 @@ class MockNcinsServer:
 
     def start(self) -> str:
         MockNcinsHandler.generated_ids = {KNOWN_FILE_ID}
+        MockNcinsHandler.generated_operation_ids = {KNOWN_OPERATION_ID}
         self._thread.start()
         return self.base_url
 

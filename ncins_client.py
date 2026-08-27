@@ -1,4 +1,4 @@
-"""Клиент ncins-core-api для NCINS-305 / NCINS-277."""
+"""Клиент ncins-core-api для NCINS-305 / NCINS-277 / NCINS-306."""
 
 from __future__ import annotations
 
@@ -13,11 +13,13 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 GENERATE_FORM_PATH = "/v1/doc/generate-form"
 DOWNLOAD_PATH = "/v1/doc/download"
+DOWNLOAD_SIGNED_PATH = "/v1/doc/download-signed"
 
 DEFAULT_BASE_URL = (
     "https://int.ufrulkint-api.moscow.alfaintra.net/ufr-eos-ul-ncins-core-api"
 )
 EXAMPLE_FILE_ID = "285946b0-002e-428c-b1e1-d5c558e81c24"
+EXAMPLE_OPERATION_ID = "6a8f275decea715b0ef88213"
 
 
 def load_dotenv(path: str = ".env") -> None:
@@ -59,10 +61,12 @@ class NcinsConfig:
     manager_branch_code: str
     group: str
     file_id: str | None
+    operation_id: str | None
 
     @classmethod
     def from_env(cls, base_url: str | None = None) -> "NcinsConfig":
         file_id = os.getenv("NCINS_FILE_ID", "").strip() or None
+        operation_id = os.getenv("NCINS_OPERATION_ID", "").strip() or None
         return cls(
             base_url=(base_url or os.getenv("NCINS_BASE_URL") or DEFAULT_BASE_URL).rstrip(
                 "/"
@@ -86,6 +90,7 @@ class NcinsConfig:
             manager_branch_code=os.getenv("NCINS_MANAGER_BRANCH_CODE", "MONY"),
             group=os.getenv("NCINS_GROUP", "UFCASH_DEPUTY_HEAD"),
             file_id=file_id,
+            operation_id=operation_id,
         )
 
     def ufr_headers(self) -> dict[str, str]:
@@ -252,3 +257,33 @@ class NcinsClient:
         if send_json:
             kwargs["json"] = body
         return self.session.post(self._url(DOWNLOAD_PATH), **kwargs)
+
+    def download_signed(
+        self,
+        operation_id: Any,
+        extra_headers: dict[str, str] | None = None,
+        raw_json: dict[str, Any] | None = None,
+        send_json: bool = True,
+    ) -> requests.Response:
+        """POST /v1/doc/download-signed — метод NCINS-306."""
+        headers = {
+            "Accept": "application/pdf",
+            "Content-Type": "application/json",
+        }
+        if extra_headers:
+            headers.update(extra_headers)
+
+        if raw_json is not None:
+            body = raw_json
+        elif operation_id is None and send_json:
+            body = {}
+        else:
+            body = {"operationId": operation_id}
+
+        kwargs: dict[str, Any] = {
+            "headers": headers,
+            "timeout": self.config.timeout,
+        }
+        if send_json:
+            kwargs["json"] = body
+        return self.session.post(self._url(DOWNLOAD_SIGNED_PATH), **kwargs)

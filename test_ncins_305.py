@@ -13,55 +13,11 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import pytest
 
-from mock_server import KNOWN_FILE_ID, PDF_BYTES, UNKNOWN_FILE_ID, MockNcinsServer
+from conftest import ARTIFACTS, LIVE, is_pdf
+from mock_server import PDF_BYTES, UNKNOWN_FILE_ID
 from ncins_client import EXAMPLE_FILE_ID, NcinsClient, NcinsConfig
-
-ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
-LIVE = os.getenv("NCINS_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _is_pdf(content: bytes) -> bool:
-    return content[:4] == b"%PDF"
-
-
-@pytest.fixture(scope="session")
-def mock_base_url() -> str:
-    server = MockNcinsServer()
-    url = server.start()
-    yield url
-    server.stop()
-
-
-@pytest.fixture
-def client(mock_base_url: str, request: pytest.FixtureRequest) -> NcinsClient:
-    """Клиент на локальный mock. Живой стенд — только тесты с маркером live."""
-    ncins_client = NcinsClient(NcinsConfig.from_env(base_url=mock_base_url))
-    request.node.http_calls = ncins_client.history
-    return ncins_client
-
-
-@pytest.fixture
-def file_id(client: NcinsClient) -> str:
-    """fileId из generate-form (NCINS-277), иначе известный пример из NCINS-305."""
-    if client.config.file_id:
-        return client.config.file_id
-
-    response = client.generate_form(include_file_attributes=True)
-    if response.status_code == 200:
-        document_ids = response.json().get("documentIds") or []
-        if document_ids:
-            return str(document_ids[0])
-    return KNOWN_FILE_ID
-
-
-# ---------------------------------------------------------------------------
-# NCINS-277: подготовка документа
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.mock
@@ -102,11 +58,6 @@ def test_generate_form_missing_required_field_returns_400(
     assert response.status_code == 400, response.text
 
 
-# ---------------------------------------------------------------------------
-# NCINS-305: скачивание документа
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.mock
 def test_download_generated_document_returns_pdf(
     client: NcinsClient, file_id: str
@@ -117,7 +68,7 @@ def test_download_generated_document_returns_pdf(
     assert response.status_code == 200, response.text
     content_type = response.headers.get("Content-Type", "")
     assert "application/pdf" in content_type, content_type
-    assert _is_pdf(response.content), response.content[:32]
+    assert is_pdf(response.content), response.content[:32]
     assert len(response.content) > 8
 
     ARTIFACTS.mkdir(exist_ok=True)
@@ -135,7 +86,7 @@ def test_download_example_file_id_from_jira(client: NcinsClient) -> None:
             f"пример fileId из Jira недоступен: {response.status_code} {response.text[:200]}"
         )
     assert response.status_code == 200, response.text
-    assert _is_pdf(response.content)
+    assert is_pdf(response.content)
 
 
 @pytest.mark.mock
@@ -208,7 +159,7 @@ def test_live_generate_and_download(request: pytest.FixtureRequest) -> None:
     download = client.download(file_id)
     assert download.status_code == 200, download.text
     assert "application/pdf" in download.headers.get("Content-Type", "")
-    assert _is_pdf(download.content)
+    assert is_pdf(download.content)
 
     ARTIFACTS.mkdir(exist_ok=True)
     (ARTIFACTS / f"{file_id}.pdf").write_bytes(download.content)
@@ -216,11 +167,11 @@ def test_live_generate_and_download(request: pytest.FixtureRequest) -> None:
 
 def test_mock_server_pdf_magic() -> None:
     """Служебное: mock отдаёт валидный PDF magic."""
-    assert _is_pdf(PDF_BYTES)
+    assert is_pdf(PDF_BYTES)
 
 
 def test_client_builds_download_url() -> None:
-    """Служебное: URL download/generate-form не теряет префикс сервиса."""
+    """Служебное: URL download/generate-form/download-signed не теряет префикс сервиса."""
     client = NcinsClient(
         NcinsConfig.from_env(base_url="http://example.local/ufr-eos-ul-ncins-core-api")
     )
@@ -231,6 +182,10 @@ def test_client_builds_download_url() -> None:
     assert (
         client._url("/v1/doc/generate-form")
         == "http://example.local/ufr-eos-ul-ncins-core-api/v1/doc/generate-form"
+    )
+    assert (
+        client._url("/v1/doc/download-signed")
+        == "http://example.local/ufr-eos-ul-ncins-core-api/v1/doc/download-signed"
     )
     payload = client.config.generate_form_payload()
     assert payload["customerData"]["cus"]

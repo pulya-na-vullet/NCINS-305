@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Единая точка запуска тестов NCINS-305: прогон, отчёт, архив."""
+"""Единая точка запуска тестов NCINS-305 / NCINS-306: прогон, отчёт, архив."""
 
 from __future__ import annotations
 
@@ -50,6 +50,7 @@ def run_tests(live: bool) -> int:
     REPORTS.mkdir(exist_ok=True)
     junit = REPORTS / "junit.xml"
     args = [
+        str(ROOT / "test_ncins_306.py"),
         str(ROOT / "test_ncins_305.py"),
         "-v",
         "--tb=short",
@@ -58,7 +59,7 @@ def run_tests(live: bool) -> int:
         "no:cacheprovider",
     ]
     print()
-    print("=== Прогон тестов NCINS-305 ===")
+    print("=== Прогон тестов NCINS-306 + NCINS-305 ===")
     print("Режим:", "INT / live" if live else "mock")
     print()
     return pytest.main(args)
@@ -98,15 +99,22 @@ def make_archive() -> Path:
         for path in sorted(ROOT.rglob("*")):
             if not path.is_file():
                 continue
-            if _should_skip(path.relative_to(ROOT)):
+            rel = path.relative_to(ROOT)
+            if _should_skip(rel):
                 continue
-            zf.write(path, arcname=str(Path("NCINS-305") / path.relative_to(ROOT)))
+            arcname = str(Path("NCINS-305") / rel)
+            mtime = datetime.fromtimestamp(path.stat().st_mtime)
+            if mtime.year < 1980:
+                mtime = datetime.now()
+            info = zipfile.ZipInfo(filename=arcname, date_time=mtime.timetuple()[:6])
+            info.compress_type = zipfile.ZIP_DEFLATED
+            zf.writestr(info, path.read_bytes())
     return out
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="NCINS-305: запуск тестов, HTML-отчёт и zip-архив."
+        description="NCINS-305 / NCINS-306: запуск тестов, HTML-отчёт и zip-архив."
     )
     parser.add_argument(
         "--live",
