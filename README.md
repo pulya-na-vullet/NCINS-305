@@ -40,6 +40,7 @@ python3 app.py --no-zip        # только тесты и отчёт, без �
 | Кейс | Ожидание |
 |---|---|
 | Скачивание по `operationId` из generate-form | `200`, PDF (`%PDF`) |
+| `operationId` из curl на INT | `200` + PDF |
 | `operationId` из комментария NCINS-306 | `200` + PDF |
 | Ответ совпадает с вложением `response.pdf` | байты PDF |
 | Нет / пустой / `null` `operationId` | `400` |
@@ -68,11 +69,11 @@ POST …/ufr-eos-ul-ncins-core-api/v1/doc/download
 POST …/ufr-eos-ul-ncins-core-api/v1/doc/download-signed
 ```
 
-Пример NCINS-306 (DEV):
+Пример NCINS-306 (INT):
 
 ```text
-POST https://dev.ufrulkint-api.moscow.alfaintra.net/ufr-eos-ul-ncins-core-api/v1/doc/download-signed
-{"operationId": "6a8f275decea715b0ef88213"}
+POST https://int.ufrulkint-api.moscow.alfaintra.net/ufr-eos-ul-ncins-core-api/v1/doc/download-signed
+{"operationId": "6a8fe2fdecea715b0ef88222"}
 ```
 
 Параметры живого стенда — в `.env.example` (скопируйте в `.env`).

@@ -19,7 +19,8 @@ PDF_BYTES = (
 
 KNOWN_FILE_ID = "285946b0-002e-428c-b1e1-d5c558e81c24"
 UNKNOWN_FILE_ID = "00000000-0000-4000-8000-000000000000"
-KNOWN_OPERATION_ID = "6a8f275decea715b0ef88213"
+KNOWN_OPERATION_ID = "6a8fe2fdecea715b0ef88222"
+KNOWN_OPERATION_ID_JIRA = "6a8f275decea715b0ef88213"
 UNKNOWN_OPERATION_ID = "000000000000000000000000"
 
 _SIGNED_SAMPLE = Path(__file__).resolve().parent / "response.pdf"
@@ -31,7 +32,7 @@ SIGNED_PDF_BYTES = (
 class MockNcinsHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     generated_ids: set[str] = {KNOWN_FILE_ID}
-    generated_operation_ids: set[str] = {KNOWN_OPERATION_ID}
+    generated_operation_ids: set[str] = {KNOWN_OPERATION_ID, KNOWN_OPERATION_ID_JIRA}
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
         return
@@ -196,7 +197,10 @@ class MockNcinsServer:
 
     def start(self) -> str:
         MockNcinsHandler.generated_ids = {KNOWN_FILE_ID}
-        MockNcinsHandler.generated_operation_ids = {KNOWN_OPERATION_ID}
+        MockNcinsHandler.generated_operation_ids = {
+            KNOWN_OPERATION_ID,
+            KNOWN_OPERATION_ID_JIRA,
+        }
         self._thread.start()
         return self.base_url
 

@@ -1,8 +1,10 @@
 """
 Тесты NCINS-306: POST /v1/doc/download-signed — получение подписанных документов.
 
-operationId берётся из ответа generate-form (NCINS-277) либо из примера в Jira:
-    "operationId": "6a8f275decea715b0ef88213"
+operationId берётся из ответа generate-form (NCINS-277) либо из примеров:
+
+    INT:  "operationId": "6a8fe2fdecea715b0ef88222"
+    Jira: "operationId": "6a8f275decea715b0ef88213"
 
 Образец ответа — вложение response.pdf (согласие + отчёт о подписании).
 
@@ -19,7 +21,7 @@ import pytest
 
 from conftest import ARTIFACTS, LIVE, SIGNED_SAMPLE_PDF, is_pdf
 from mock_server import SIGNED_PDF_BYTES, UNKNOWN_OPERATION_ID
-from ncins_client import EXAMPLE_OPERATION_ID, NcinsClient
+from ncins_client import EXAMPLE_OPERATION_ID, EXAMPLE_OPERATION_ID_JIRA, NcinsClient
 
 
 @pytest.mark.mock
@@ -42,9 +44,22 @@ def test_download_signed_generated_operation_returns_pdf(
 
 
 @pytest.mark.mock
+def test_download_signed_example_operation_id_from_int(client: NcinsClient) -> None:
+    """NCINS-306: operationId из curl на INT. На стенде операция могла истечь."""
+    response = client.download_signed(EXAMPLE_OPERATION_ID)
+    if LIVE and response.status_code in {404, 400}:
+        pytest.skip(
+            f"пример operationId с INT недоступен: "
+            f"{response.status_code} {response.text[:200]}"
+        )
+    assert response.status_code == 200, response.text
+    assert is_pdf(response.content)
+
+
+@pytest.mark.mock
 def test_download_signed_example_operation_id_from_jira(client: NcinsClient) -> None:
     """NCINS-306: operationId из комментария Jira. На стенде операция могла истечь."""
-    response = client.download_signed(EXAMPLE_OPERATION_ID)
+    response = client.download_signed(EXAMPLE_OPERATION_ID_JIRA)
     if LIVE and response.status_code in {404, 400}:
         pytest.skip(
             f"пример operationId из Jira недоступен: "

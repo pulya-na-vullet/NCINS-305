@@ -19,7 +19,9 @@ DEFAULT_BASE_URL = (
     "https://int.ufrulkint-api.moscow.alfaintra.net/ufr-eos-ul-ncins-core-api"
 )
 EXAMPLE_FILE_ID = "285946b0-002e-428c-b1e1-d5c558e81c24"
-EXAMPLE_OPERATION_ID = "6a8f275decea715b0ef88213"
+# NCINS-306: INT (уточнение) и пример из комментария Jira / DEV
+EXAMPLE_OPERATION_ID = "6a8fe2fdecea715b0ef88222"
+EXAMPLE_OPERATION_ID_JIRA = "6a8f275decea715b0ef88213"
 
 
 def load_dotenv(path: str = ".env") -> None:
