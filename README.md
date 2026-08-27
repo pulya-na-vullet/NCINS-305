@@ -69,11 +69,16 @@ POST …/ufr-eos-ul-ncins-core-api/v1/doc/download
 POST …/ufr-eos-ul-ncins-core-api/v1/doc/download-signed
 ```
 
-Пример NCINS-306 (INT):
+Curl NCINS-306 на INT:
 
-```text
-POST https://int.ufrulkint-api.moscow.alfaintra.net/ufr-eos-ul-ncins-core-api/v1/doc/download-signed
-{"operationId": "6a8fe2fdecea715b0ef88222"}
+```bash
+curl -X 'POST' \
+  'https://int.ufrulkint-api.moscow.alfaintra.net/ufr-eos-ul-ncins-core-api/v1/doc/download-signed' \
+  -H 'accept: application/pdf' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "operationId": "6a8fe2fdecea715b0ef88222"
+}'
 ```
 
 Параметры живого стенда — в `.env.example` (скопируйте в `.env`).

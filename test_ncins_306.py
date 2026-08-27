@@ -131,15 +131,10 @@ def test_download_signed_get_not_allowed(
 @pytest.mark.live
 @pytest.mark.skipif(not LIVE, reason="Задайте NCINS_LIVE=1 для стенда")
 def test_live_download_signed(request: pytest.FixtureRequest) -> None:
-    """E2E: generate-form → download-signed PDF (или NCINS_OPERATION_ID)."""
+    """E2E на INT: POST /v1/doc/download-signed с operationId из curl."""
     client = NcinsClient()
     request.node.http_calls = client.history
-    operation_id = client.config.operation_id
-    if not operation_id:
-        generate = client.generate_form(include_file_attributes=True)
-        assert generate.status_code == 200, generate.text
-        operation_id = str(generate.json().get("operationId") or "")
-        assert operation_id, generate.text
+    operation_id = client.config.operation_id or EXAMPLE_OPERATION_ID
 
     download = client.download_signed(operation_id)
     if download.status_code in {404, 400}:
